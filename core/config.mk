@@ -156,11 +156,7 @@ COMMON_PACKAGE_SUFFIX := .zip
 COMMON_JAVA_PACKAGE_SUFFIX := .jar
 COMMON_ANDROID_PACKAGE_SUFFIX := .apk
 
-ifdef TMPDIR
-JAVA_TMPDIR_ARG := -Djava.io.tmpdir=$(TMPDIR)
-else
-JAVA_TMPDIR_ARG :=
-endif
+TARGET_ERROR_FLAGS := -Werror=return-type -Werror=non-virtual-dtor -Werror=address -Werror=sequence-point
 
 # ###############################################################
 # Include sub-configuration files
@@ -490,7 +486,11 @@ SIGNAPK_JNI_LIBRARY_PATH := $(HOST_OUT_SHARED_LIBRARIES)
 LLVM_RS_CC := $(HOST_OUT_EXECUTABLES)/llvm-rs-cc
 BCC_COMPAT := $(HOST_OUT_EXECUTABLES)/bcc_compat
 
-DX := $(HOST_OUT_EXECUTABLES)/dx
+#DX := $(HOST_OUT_EXECUTABLES)/dx
+#MAINDEXCLASSES := $(HOST_OUT_EXECUTABLES)/mainDexClasses
+DX := atool/dx
+DESUGAR := atool/desugar.jar
+RTAAA := java -jar atool/rt.jar
 MAINDEXCLASSES := $(HOST_OUT_EXECUTABLES)/mainDexClasses
 
 USE_PREBUILT_SDK_TOOLS_IN_PLACE := true
@@ -519,22 +519,13 @@ BCC_COMPAT := $(prebuilt_sdk_tools_bin)/bcc_compat
 endif # TARGET_BUILD_PDK
 endif # TARGET_BUILD_APPS || TARGET_BUILD_PDK
 
-
-# ---------------------------------------------------------------
-# Generic tools.
-JACK := $(HOST_OUT_EXECUTABLES)/jack
-
-ifeq ($(USE_HOST_LEX),yes)
 LEX := flex
-else
-LEX := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/flex/flex-2.5.39
-endif
 # The default PKGDATADIR built in the prebuilt bison is a relative path
 # external/bison/data.
 # To run bison from elsewhere you need to set up enviromental variable
 # BISON_PKGDATADIR.
 BISON_PKGDATADIR := $(PWD)/external/bison/data
-BISON := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/bison/bison
+BISON := bison
 YACC := $(BISON) -d
 
 YASM := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/yasm/yasm
@@ -577,18 +568,7 @@ E2FSCK := $(HOST_OUT_EXECUTABLES)/e2fsck$(HOST_EXECUTABLE_SUFFIX)
 JARJAR := $(HOST_OUT_JAVA_LIBRARIES)/jarjar.jar
 DATA_BINDING_COMPILER := $(HOST_OUT_JAVA_LIBRARIES)/databinding-compiler.jar
 
-ifeq ($(ANDROID_COMPILE_WITH_JACK),true)
-DEFAULT_JACK_ENABLED:=full
-else
 DEFAULT_JACK_ENABLED:=
-endif
-ifneq ($(ANDROID_JACK_EXTRA_ARGS),)
-DEFAULT_JACK_EXTRA_ARGS := $(ANDROID_JACK_EXTRA_ARGS)
-else
-DEFAULT_JACK_EXTRA_ARGS := @$(BUILD_SYSTEM)/jack-default.args
-endif
-# Turn off jack warnings by default.
-DEFAULT_JACK_EXTRA_ARGS += --verbose error
 
 PROGUARD := external/proguard/bin/proguard.sh
 JAVATAGS := build/tools/java-event-log-tags.py

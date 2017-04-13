@@ -60,10 +60,6 @@ LOCAL_MODULE_CLASS := APPS
 intermediates := $(call local-intermediates-dir)
 intermediates.COMMON := $(call local-intermediates-dir,COMMON)
 
-#################################
-include $(BUILD_SYSTEM)/configure_local_jack.mk
-#################################
-
 # Package LOCAL_MODULE_TAGS default to optional
 LOCAL_MODULE_TAGS := $(strip $(LOCAL_MODULE_TAGS))
 ifeq ($(LOCAL_MODULE_TAGS),)
@@ -209,13 +205,6 @@ endif # need_compile_res
 endif # !custom
 LOCAL_PROGUARD_FLAGS := $(addprefix -include ,$(proguard_options_file)) $(LOCAL_PROGUARD_FLAGS)
 
-ifdef LOCAL_JACK_ENABLED
-ifndef LOCAL_JACK_PROGUARD_FLAGS
-    LOCAL_JACK_PROGUARD_FLAGS := $(LOCAL_PROGUARD_FLAGS)
-endif
-LOCAL_JACK_PROGUARD_FLAGS := $(addprefix -include ,$(proguard_options_file)) $(LOCAL_JACK_PROGUARD_FLAGS)
-endif # LOCAL_JACK_ENABLED
-
 ifeq (true,$(EMMA_INSTRUMENT))
 ifndef LOCAL_EMMA_INSTRUMENT
 # No emma for test apks.
@@ -229,46 +218,19 @@ endif # EMMA_INSTRUMENT is true
 
 ifeq (true,$(LOCAL_EMMA_INSTRUMENT))
 ifeq (true,$(EMMA_INSTRUMENT_STATIC))
-ifdef LOCAL_JACK_ENABLED
-# Jack supports coverage with Jacoco
-ifneq ($(LOCAL_SRC_FILES)$(LOCAL_STATIC_JAVA_LIBRARIES)$(LOCAL_SOURCE_FILES_ALL_GENERATED),)
-# Only add jacocoagent if the package contains some java code
-LOCAL_STATIC_JAVA_LIBRARIES += jacocoagent
-endif # Contains java code
-else
 LOCAL_STATIC_JAVA_LIBRARIES += emma
-endif # LOCAL_JACK_ENABLED
 else
 ifdef LOCAL_SDK_VERSION
 ifdef TARGET_BUILD_APPS
 # In unbundled build, merge the coverage library into the apk.
-ifdef LOCAL_JACK_ENABLED
-# Jack supports coverage with Jacoco
-ifneq ($(LOCAL_SRC_FILES)$(LOCAL_STATIC_JAVA_LIBRARIES)$(LOCAL_SOURCE_FILES_ALL_GENERATED),)
-# Only add jacocoagent if the package contains some java code
-LOCAL_STATIC_JAVA_LIBRARIES += jacocoagent
-# Exclude jacoco classes from proguard
-LOCAL_PROGUARD_FLAGS += -include $(BUILD_SYSTEM)/proguard.jacoco.flags
-LOCAL_JACK_PROGUARD_FLAGS += -include $(BUILD_SYSTEM)/proguard.jacoco.flags
-endif # Contains java code
-else
 LOCAL_STATIC_JAVA_LIBRARIES += emma
-endif # LOCAL_JACK_ENABLED
 else
 # If build against the SDK in full build, core.jar is not used
 # so coverage classes are not present.
-ifdef LOCAL_JACK_ENABLED
-# Jack needs jacoco on the classpath but we do not want it to be in
-# the final apk. While it is a static library, we add it to the
-# LOCAL_JAVA_LIBRARIES which are only present on the classpath.
-# Note: we have nothing to do for proguard since jacoco will be
-# on the classpath only, thus not modified during the compilation.
-LOCAL_JAVA_LIBRARIES += jacocoagent
-else
+
 # We have to use prebuilt emma.jar to make Proguard happy;
 # Otherwise emma classes are included in core.jar.
 LOCAL_PROGUARD_FLAGS += -libraryjars $(EMMA_JAR)
-endif # LOCAL_JACK_ENABLED
 endif # full build
 endif # LOCAL_SDK_VERSION
 endif # EMMA_INSTRUMENT_STATIC
@@ -280,7 +242,6 @@ ifeq ($(LOCAL_DATA_BINDING),true)
 data_binding_intermediates := $(intermediates.COMMON)/data-binding
 
 LOCAL_JAVACFLAGS += -processorpath $(DATA_BINDING_COMPILER) -s $(data_binding_intermediates)/anno-src
-LOCAL_JACK_FLAGS += --processorpath $(DATA_BINDING_COMPILER)
 
 LOCAL_STATIC_JAVA_LIBRARIES += databinding-baselibrary
 LOCAL_STATIC_JAVA_AAR_LIBRARIES += databinding-library databinding-adapters
@@ -307,13 +268,6 @@ endif
 
 $(LOCAL_INTERMEDIATE_TARGETS): \
     PRIVATE_ANDROID_MANIFEST := $(full_android_manifest)
-ifneq (,$(filter-out current system_current test_current, $(LOCAL_SDK_VERSION)))
-$(LOCAL_INTERMEDIATE_TARGETS): \
-    PRIVATE_DEFAULT_APP_TARGET_SDK := $(LOCAL_SDK_VERSION)
-else
-$(LOCAL_INTERMEDIATE_TARGETS): \
-    PRIVATE_DEFAULT_APP_TARGET_SDK := $(DEFAULT_APP_TARGET_SDK)
-endif
 
 ifeq ($(LOCAL_DATA_BINDING),true)
 data_binding_stamp := $(data_binding_intermediates)/data-binding.stamp
@@ -396,19 +350,6 @@ endif  # LOCAL_USE_AAPT2
 # Other modules should depend on the BUILT module if
 # they want to use this module's R.java file.
 $(LOCAL_BUILT_MODULE): $(R_file_stamp)
-
-ifdef LOCAL_JACK_ENABLED
-ifneq ($(built_dex_intermediate),)
-$(built_dex_intermediate): $(R_file_stamp)
-endif
-ifneq ($(noshrob_classes_jack),)
-$(noshrob_classes_jack): $(R_file_stamp)
-endif
-ifneq ($(full_classes_jack),)
-$(full_classes_jack): $(R_file_stamp)
-$(jack_check_timestamp): $(R_file_stamp)
-endif
-endif # LOCAL_JACK_ENABLED
 
 ifneq ($(full_classes_jar),)
 # If full_classes_jar is non-empty, we're building sources.
@@ -541,22 +482,14 @@ $(LOCAL_BUILT_MODULE) : $(all_res_assets) $(full_android_manifest) $(AAPT)
 endif
 	@echo "target Package: $(PRIVATE_MODULE) ($@)"
 ifdef LOCAL_USE_AAPT2
-ifdef LOCAL_JACK_ENABLED
-	$(call copy-file-to-new-target)
-else
 	@# TODO: implement merge-two-packages.
 	$(if $(PRIVATE_SOURCE_ARCHIVE),\
-	  $(call merge-two-packages,$(PRIVATE_RES_PACKAGE) $(PRIVATE_SOURCE_ARCHIVE),$@),
-	  $(call copy-file-to-new-target))
-endif
+	$(call merge-two-packages,$(PRIVATE_RES_PACKAGE) $(PRIVATE_SOURCE_ARCHIVE),$@),
+	$(call copy-file-to-new-target))
 else  # LOCAL_USE_AAPT2
-ifdef LOCAL_JACK_ENABLED
-	$(create-empty-package)
-else
 	$(if $(PRIVATE_SOURCE_ARCHIVE),\
-	  $(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@),\
-	  $(create-empty-package))
-endif
+	$(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@),\
+	$(create-empty-package))
 	$(add-assets-to-package)
 endif  # LOCAL_USE_AAPT2
 ifneq ($(jni_shared_libraries),)
@@ -568,9 +501,6 @@ ifeq ($(full_classes_jar),)
 else  # full_classes_jar
 	$(add-dex-to-package)
 endif  # full_classes_jar
-ifdef LOCAL_JACK_ENABLED
-	$(add-carried-jack-resources)
-endif
 ifdef LOCAL_DEX_PREOPT
 ifneq ($(BUILD_PLATFORM_ZIP),)
 	@# Keep a copy of apk with classes.dex unstripped

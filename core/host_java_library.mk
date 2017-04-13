@@ -106,4 +106,3 @@ $(built_javalib_jar): $(full_classes_jarjar_jar) | $(ACP)
 	@echo Copying: $@
 	$(hide) $(ACP) -fp $< $@
 endif # LOCAL_EMMA_INSTRUMENT
-
