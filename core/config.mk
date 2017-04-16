@@ -491,7 +491,7 @@ BCC_COMPAT := $(HOST_OUT_EXECUTABLES)/bcc_compat
 DX := atool/dx
 DESUGAR := atool/desugar.jar
 RTAAA := java -jar atool/rt.jar
-MAINDEXCLASSES := $(HOST_OUT_EXECUTABLES)/mainDexClasses
+MAINDEXCLASSES := atool/mainDexClasses
 
 USE_PREBUILT_SDK_TOOLS_IN_PLACE := true
 

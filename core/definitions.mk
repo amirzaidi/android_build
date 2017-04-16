@@ -2069,6 +2069,7 @@ $(if $(PRIVATE_JAVA_LAYERS_FILE), $(hide) build/tools/java-layers.py \
     $(PRIVATE_JAVA_LAYERS_FILE) \@$(PRIVATE_CLASS_INTERMEDIATES_DIR)/java-source-list-uniq,)
 $(hide) rm -f $(PRIVATE_CLASS_INTERMEDIATES_DIR)/java-source-list
 $(hide) rm -f $(PRIVATE_CLASS_INTERMEDIATES_DIR)/java-source-list-uniq
+$(hide) rm -f $(PRIVATE_CLASS_INTERMEDIATES_DIR)/classes*.dex
 $(if $(PRIVATE_JAR_EXCLUDE_FILES), $(hide) find $(PRIVATE_CLASS_INTERMEDIATES_DIR) \
     -name $(word 1, $(PRIVATE_JAR_EXCLUDE_FILES)) \
     $(addprefix -o -name , $(wordlist 2, 999, $(PRIVATE_JAR_EXCLUDE_FILES))) \
@@ -2308,6 +2309,7 @@ $(hide) if [ -s $(PRIVATE_CLASS_INTERMEDIATES_DIR)/java-source-list-uniq ] ; the
 fi
 $(hide) rm -f $(PRIVATE_CLASS_INTERMEDIATES_DIR)/java-source-list
 $(hide) rm -f $(PRIVATE_CLASS_INTERMEDIATES_DIR)/java-source-list-uniq
+$(hide) rm -f $(PRIVATE_CLASS_INTERMEDIATES_DIR)/classes*.dex
 $(hide) rm -f $@
 $(if $(PRIVATE_JAR_EXCLUDE_FILES), $(hide) find $(PRIVATE_CLASS_INTERMEDIATES_DIR) \
     -name $(word 1, $(PRIVATE_JAR_EXCLUDE_FILES)) \
@@ -2337,10 +2339,6 @@ define transform-java-to-classes.jar
 $(call compile-java,$(TARGET_JAVAC),$(PRIVATE_BOOTCLASSPATH))
 endef
 endif # ENABLE_INCREMENTALJAVAC
-
-define desugar-classpath
-$(filter-out -classpath -bootclasspath "",$(subst :,$(space),$(1)))
-endef
 
 define desugar-classpath
 $(filter-out -classpath -bootclasspath "",$(subst :,$(space),$(1)))

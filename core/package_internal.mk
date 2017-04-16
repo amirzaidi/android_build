@@ -187,23 +187,10 @@ endif
 LOCAL_BUILT_MODULE_STEM := package.apk
 LOCAL_INSTALLED_MODULE_STEM := $(LOCAL_MODULE).apk
 
-LOCAL_PROGUARD_ENABLED:=$(strip $(LOCAL_PROGUARD_ENABLED))
-ifndef LOCAL_PROGUARD_ENABLED
-ifneq ($(DISABLE_PROGUARD),true)
-    LOCAL_PROGUARD_ENABLED :=full
-endif
-endif
-ifeq ($(LOCAL_PROGUARD_ENABLED),disabled)
-    # the package explicitly request to disable proguard.
-    LOCAL_PROGUARD_ENABLED :=
-endif
+LOCAL_PROGUARD_ENABLED:=
+
 proguard_options_file :=
-ifneq ($(LOCAL_PROGUARD_ENABLED),custom)
-ifeq ($(need_compile_res),true)
-    proguard_options_file := $(intermediates.COMMON)/proguard_options
-endif # need_compile_res
-endif # !custom
-LOCAL_PROGUARD_FLAGS := $(addprefix -include ,$(proguard_options_file)) $(LOCAL_PROGUARD_FLAGS)
+
 
 ifeq (true,$(EMMA_INSTRUMENT))
 ifndef LOCAL_EMMA_INSTRUMENT

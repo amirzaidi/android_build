@@ -105,15 +105,7 @@ full_classes_compiled_jar_leaf := classes-full-debug.jar
 built_dex_intermediate_leaf := with-local
 endif
 
-ifeq ($(LOCAL_PROGUARD_ENABLED),disabled)
 LOCAL_PROGUARD_ENABLED :=
-endif
-
-ifdef LOCAL_PROGUARD_ENABLED
-proguard_jar_leaf := proguard.classes.jar
-else
-proguard_jar_leaf := noproguard.classes.jar
-endif
 
 full_classes_compiled_jar := $(intermediates.COMMON)/$(full_classes_compiled_jar_leaf)
 full_classes_desugar_jar := $(intermediates.COMMON)/desugar.classes.jar
@@ -123,7 +115,6 @@ emma_intermediates_dir := $(intermediates.COMMON)/emma_out
 # emma is hardcoded to use the leaf name of its input for the output file --
 # only the output directory can be changed
 full_classes_emma_jar := $(emma_intermediates_dir)/lib/$(jarjar_leaf)
-full_classes_proguard_jar := $(intermediates.COMMON)/$(proguard_jar_leaf)
 built_dex_intermediate := $(intermediates.COMMON)/$(built_dex_intermediate_leaf)/classes.dex
 full_classes_stubs_jar := $(intermediates.COMMON)/stubs.jar
 
@@ -142,7 +133,6 @@ LOCAL_INTERMEDIATE_TARGETS += \
 	$(full_classes_desugar_jar) \
     $(full_classes_emma_jar) \
     $(full_classes_jar) \
-    $(full_classes_proguard_jar) \
     $(built_dex_intermediate) \
     $(built_dex) \
     $(full_classes_stubs_jar)
@@ -434,13 +424,21 @@ $(full_classes_compiled_jar): \
         $(RenderScript_file_stamp) \
         $(proto_java_sources_file_stamp) \
         $(LOCAL_MODULE_MAKEFILE_DEP) \
+        $(annotation_processor_deps) \
         $(LOCAL_ADDITIONAL_DEPENDENCIES)
-	$(transform-java-to-classes.jar)
+		$(transform-java-to-classes.jar)
 
+my_desugaring :=
+ifndef LOCAL_IS_STATIC_JAVA_LIBRARY
+my_desugaring := true
 $(full_classes_desugar_jar): PRIVATE_DX_FLAGS := $(LOCAL_DX_FLAGS)
 $(full_classes_desugar_jar): $(full_classes_compiled_jar) $(DESUGAR)
 	$(desugar-classes-jar)
+endif
 
+ifndef my_desugaring
+full_classes_desugar_jar := $(full_classes_compiled_jar)
+endif
 
 # Run jarjar if necessary, otherwise just copy the file.
 ifneq ($(strip $(LOCAL_JARJAR_RULES)),)
@@ -483,111 +481,6 @@ $(full_classes_jar): $(full_classes_jar_source) | $(ACP)
 
 $(call define-jar-to-toc-rule, $(full_classes_jar))
 
-# Run proguard if necessary, otherwise just copy the file.
-ifdef LOCAL_PROGUARD_ENABLED
-ifneq ($(filter-out full custom nosystem obfuscation optimization shrinktests,$(LOCAL_PROGUARD_ENABLED)),)
-    $(warning while processing: $(LOCAL_MODULE))
-    $(error invalid value for LOCAL_PROGUARD_ENABLED: $(LOCAL_PROGUARD_ENABLED))
-endif
-proguard_dictionary := $(intermediates.COMMON)/proguard_dictionary
-jack_dictionary := $(intermediates.COMMON)/jack_dictionary
-
-# Hack: see b/20667396
-# When an app's LOCAL_SDK_VERSION is lower than the support library's LOCAL_SDK_VERSION,
-# we artifically raises the "SDK version" "linked" by ProGuard, to
-# - suppress ProGuard warnings of referencing symbols unknown to the lower SDK version.
-# - prevent ProGuard stripping subclass in the support library that extends class added in the higher SDK version.
-my_support_library_sdk_raise :=
-ifneq (,$(filter android-support-%,$(LOCAL_STATIC_JAVA_LIBRARIES)))
-ifdef LOCAL_SDK_VERSION
-ifdef TARGET_BUILD_APPS
-ifeq (,$(filter current system_current test_current, $(LOCAL_SDK_VERSION)))
-  my_support_library_sdk_raise := $(call java-lib-files, sdk_vcurrent)
-endif
-else
-  # For platform build, we can't just raise to the "current" SDK,
-  # that would break apps that use APIs removed from the current SDK.
-  my_support_library_sdk_raise := $(call java-lib-files,$(TARGET_DEFAULT_JAVA_LIBRARIES))
-endif
-endif
-endif
-
-# jack already has the libraries in its classpath and doesn't support jars
-legacy_proguard_flags := $(addprefix -libraryjars ,$(my_support_library_sdk_raise) $(full_shared_java_libs))
-
-legacy_proguard_flags += -printmapping $(proguard_dictionary)
-
-common_proguard_flags := -dontwarn -forceprocessing
-
-ifeq ($(filter nosystem,$(LOCAL_PROGUARD_ENABLED)),)
-common_proguard_flags += -include $(BUILD_SYSTEM)/proguard.flags
-ifeq ($(LOCAL_EMMA_INSTRUMENT),true)
-common_proguard_flags += -include $(BUILD_SYSTEM)/proguard.emma.flags
-endif
-# If this is a test package, add proguard keep flags for tests.
-ifneq ($(LOCAL_INSTRUMENTATION_FOR)$(filter tests,$(LOCAL_MODULE_TAGS)),)
-common_proguard_flags += -include $(BUILD_SYSTEM)/proguard_tests.flags
-ifeq ($(filter shrinktests,$(LOCAL_PROGUARD_ENABLED)),)
-common_proguard_flags += -dontshrink # don't shrink tests by default
-endif # shrinktests
-endif # test package
-ifeq ($(filter obfuscation,$(LOCAL_PROGUARD_ENABLED)),)
-# By default no obfuscation
-common_proguard_flags += -dontobfuscate
-endif  # No obfuscation
-ifeq ($(filter optimization,$(LOCAL_PROGUARD_ENABLED)),)
-# By default no optimization
-common_proguard_flags += -dontoptimize
-endif  # No optimization
-
-ifdef LOCAL_INSTRUMENTATION_FOR
-ifeq ($(filter obfuscation,$(LOCAL_PROGUARD_ENABLED)),)
-# If no obfuscation, link in the instrmented package's classes.jar as a library.
-# link_instr_classes_jar is defined in base_rule.mk
-# jack already has this library in its classpath and doesn't support jars
-legacy_proguard_flags += -libraryjars $(link_instr_classes_jar)
-else # obfuscation
-# If obfuscation is enabled, the main app must be obfuscated too.
-# We need to run obfuscation using the main app's dictionary,
-# and treat the main app's class.jar as injars instead of libraryjars.
-legacy_proguard_flags := -injars  $(link_instr_classes_jar) \
-    -outjars $(intermediates.COMMON)/proguard.$(LOCAL_INSTRUMENTATION_FOR).jar \
-    -include $(link_instr_intermediates_dir.COMMON)/proguard_options \
-    -applymapping $(link_instr_intermediates_dir.COMMON)/proguard_dictionary \
-    -verbose \
-    $(legacy_proguard_flags)
-
-# Sometimes (test + main app) uses different keep rules from the main app -
-# apply the main app's dictionary anyway.
-legacy_proguard_flags += -ignorewarnings
-
-# Make sure we run Proguard on the main app first
-$(full_classes_proguard_jar) : $(link_instr_intermediates_dir.COMMON)/proguard.classes.jar
-
-endif # no obfuscation
-endif # LOCAL_INSTRUMENTATION_FOR
-endif  # LOCAL_PROGUARD_ENABLED is not nosystem
-
-proguard_flag_files := $(addprefix $(LOCAL_PATH)/, $(LOCAL_PROGUARD_FLAG_FILES))
-LOCAL_PROGUARD_FLAGS += $(addprefix -include , $(proguard_flag_files))
-
-ifdef LOCAL_TEST_MODULE_TO_PROGUARD_WITH
-extra_input_jar := $(call intermediates-dir-for,APPS,$(LOCAL_TEST_MODULE_TO_PROGUARD_WITH),,COMMON)/classes.jar
-else
-extra_input_jar :=
-endif
-$(full_classes_proguard_jar): PRIVATE_EXTRA_INPUT_JAR := $(extra_input_jar)
-$(full_classes_proguard_jar): PRIVATE_PROGUARD_FLAGS := $(legacy_proguard_flags) $(common_proguard_flags) $(LOCAL_PROGUARD_FLAGS)
-$(full_classes_proguard_jar) : $(full_classes_jar) $(extra_input_jar) $(my_support_library_sdk_raise) $(proguard_flag_files) | $(ACP) $(PROGUARD)
-	$(call transform-jar-to-proguard)
-
-else  # LOCAL_PROGUARD_ENABLED not defined
-$(full_classes_proguard_jar) : $(full_classes_jar)
-	@echo Copying: $@
-	$(hide) $(ACP) -fp $< $@
-
-endif # LOCAL_PROGUARD_ENABLED defined
-
 # Override PRIVATE_INTERMEDIATES_DIR so that install-dex-debug
 # will work even when intermediates != intermediates.COMMON.
 $(built_dex_intermediate): PRIVATE_INTERMEDIATES_DIR := $(intermediates.COMMON)
@@ -602,7 +495,7 @@ ifeq ($(LOCAL_EMMA_INSTRUMENT),true)
 $(built_dex_intermediate): PRIVATE_DX_FLAGS += --no-locals
 endif
 
-$(built_dex_intermediate): $(full_classes_proguard_jar) $(DX)
+$(built_dex_intermediate): $(full_classes_jar) $(DX)
 	$(transform-classes.jar-to-dex)
 
 $(built_dex): $(built_dex_intermediate) | $(ACP)
