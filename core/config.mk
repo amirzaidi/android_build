@@ -487,11 +487,10 @@ LLVM_RS_CC := $(HOST_OUT_EXECUTABLES)/llvm-rs-cc
 BCC_COMPAT := $(HOST_OUT_EXECUTABLES)/bcc_compat
 
 #DX := $(HOST_OUT_EXECUTABLES)/dx
-#MAINDEXCLASSES := $(HOST_OUT_EXECUTABLES)/mainDexClasses
-DX := atool/dx
-DESUGAR := atool/desugar.jar
-RTAAA := java -jar atool/rt.jar
-MAINDEXCLASSES := atool/mainDexClasses
+DX := build/atool/dx
+DESUGAR := build/atool/desugar.jar
+RTAAA := java -jar build/atool/rt.jar
+MAINDEXCLASSES := $(HOST_OUT_EXECUTABLES)/mainDexClasses
 
 USE_PREBUILT_SDK_TOOLS_IN_PLACE := true
 
